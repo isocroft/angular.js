@@ -107,7 +107,7 @@
  * <div doc-module-components="ng"></div>
  */
 
-var REGEX_STRING_REGEXP = /^\/(.+)\/([a-z]*)$/;
+var REGEX_STRING_REGEXP = /^\/(.+)\/([a-z]*)$/; 
 
 // The name of a form control's ValidityState property.
 // This is used so that it's possible for internal tests to create mock ValidityStates.
@@ -240,7 +240,7 @@ function isArrayLike(obj) {
  * @returns {Object|Array} Reference to `obj`.
  */
 
-function forEach(obj, iterator, context) {
+function forEach(obj, iterator, context) {  
   var key, length;
   if (obj) {
     if (isFunction(obj)) {
@@ -289,7 +289,7 @@ function forEachSorted(obj, iterator, context) {
  * @param {function(string, *)} iteratorFn
  * @returns {function(*, string)}
  */
-function reverseParams(iteratorFn) {
+function reverseParams(iteratorFn){
   return function(value, key) { iteratorFn(key, value); };
 }
 
@@ -590,7 +590,7 @@ var trim = function(value) {
 // Prereq: s is a string.
 var escapeForRegexp = function(s) {
   return s.replace(/([-()\[\]{}+?*.$\^|,:#<!\\])/g, '\\$1').
-           replace(/\x08/g, '\\x08');
+           replace(/\x08/g, '\\x08'); 
 };
 
 
