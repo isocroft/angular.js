@@ -1,5 +1,16 @@
 'use strict';
 
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+ *     Any commits to this file should be reviewed with security in mind.  *
+ *   Changes to this file can potentially create security vulnerabilities. *
+ *          An approval from 2 Core members with history of modifying      *
+ *                         this file is required.                          *
+ *                                                                         *
+ *  Does the change somehow allow for arbitrary javascript to be executed? *
+ *    Or allows for someone to change the prototype of built-in objects?   *
+ *     Or gives undesired access to variables likes document or window?    *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
 /* ! VARIABLE/FUNCTION NAMING CONVENTIONS THAT APPLY TO THIS FILE!
  *
  * DOM-related variables:
@@ -64,7 +75,8 @@
  *       templateNamespace: 'html',
  *       scope: false,
  *       controller: function($scope, $element, $attrs, $transclude, otherInjectables) { ... },
- *       controllerAs: 'stringAlias',
+ *       controllerAs: 'stringIdentifier',
+ *       bindToController: false,
  *       require: 'siblingDirectiveName', // or // ['^parentDirectiveName', '?optionalDirectiveName', '?^optionalParent'],
  *       compile: function compile(tElement, tAttrs, transclude) {
  *         return {
@@ -115,7 +127,7 @@
  * #### `multiElement`
  * When this property is set to true, the HTML compiler will collect DOM nodes between
  * nodes with the attributes `directive-name-start` and `directive-name-end`, and group them
- * together as the directive elements. It is recomended that this feature be used on directives
+ * together as the directive elements. It is recommended that this feature be used on directives
  * which are not strictly behavioural (such as {@link ngClick}), and which
  * do not manipulate or replace child nodes (such as {@link ngInclude}).
  *
@@ -180,7 +192,7 @@
  *
  *
  * #### `bindToController`
- * When an isolate scope is used for a component (see above), and `controllerAs` is used, `bindToController` will
+ * When an isolate scope is used for a component (see above), and `controllerAs` is used, `bindToController: true` will
  * allow a component to have its properties bound to the controller, rather than to scope. When the controller
  * is instantiated, the initial values of the isolate scope bindings are already available.
  *
@@ -211,7 +223,8 @@
  * Require another directive and inject its controller as the fourth argument to the linking function. The
  * `require` takes a string name (or array of strings) of the directive(s) to pass in. If an array is used, the
  * injected argument will be an array in corresponding order. If no such directive can be
- * found, or if the directive does not have a controller, then an error is raised. The name can be prefixed with:
+ * found, or if the directive does not have a controller, then an error is raised (unless no link function
+ * is specified, in which case error checking is skipped). The name can be prefixed with:
  *
  * * (no prefix) - Locate the required controller on the current element. Throw an error if not found.
  * * `?` - Attempt to locate the required controller or pass `null` to the `link` fn if not found.
@@ -224,9 +237,10 @@
  *
  *
  * #### `controllerAs`
- * Controller alias at the directive scope. An alias for the controller so it
- * can be referenced at the directive template. The directive needs to define a scope for this
- * configuration to be used. Useful in the case when directive is used as component.
+ * Identifier name for a reference to the controller in the directive's scope.
+ * This allows the controller to be referenced from the directive template. The directive
+ * needs to define a scope for this configuration to be used. Useful in the case when
+ * directive is used as component.
  *
  *
  * #### `restrict`
@@ -345,7 +359,7 @@
  * `templateUrl` declaration or manual compilation inside the compile function.
  * </div>
  *
- * <div class="alert alert-error">
+ * <div class="alert alert-danger">
  * **Note:** The `transclude` function that is passed to the compile function is deprecated, as it
  *   e.g. does not know about the right outer scope. Please use the transclude function that is passed
  *   to the link function instead.
@@ -382,9 +396,15 @@
  *   * `iAttrs` - instance attributes - Normalized list of attributes declared on this element shared
  *     between all directive linking functions.
  *
- *   * `controller` - a controller instance - A controller instance if at least one directive on the
- *     element defines a controller. The controller is shared among all the directives, which allows
- *     the directives to use the controllers as a communication channel.
+ *   * `controller` - the directive's required controller instance(s) - Instances are shared
+ *     among all directives, which allows the directives to use the controllers as a communication
+ *     channel. The exact value depends on the directive's `require` property:
+ *       * `string`: the controller instance
+ *       * `array`: array of controller instances
+ *       * no controller(s) required: `undefined`
+ *
+ *     If a required controller cannot be found, and it is optional, the instance is `null`,
+ *     otherwise the {@link error:$compile:ctreq Missing Required Controller} error is thrown.
  *
  *   * `transcludeFn` - A transclude linking function pre-bound to the correct transclusion scope.
  *     This is the same as the `$transclude`
@@ -477,7 +497,7 @@
  *
  * <div class="alert alert-info">
  * **Best Practice**: if you intend to add and remove transcluded content manually in your directive
- * (by calling the transclude function to get the DOM and and calling `element.remove()` to remove it),
+ * (by calling the transclude function to get the DOM and calling `element.remove()` to remove it),
  * then you are also responsible for calling `$destroy` on the transclusion scope.
  * </div>
  *
@@ -622,10 +642,17 @@
  *
  *
  * @param {string|DOMElement} element Element or HTML string to compile into a template function.
- * @param {function(angular.Scope, cloneAttachFn=)} transclude function available to directives.
+ * @param {function(angular.Scope, cloneAttachFn=)} transclude function available to directives - DEPRECATED.
+ *
+ * <div class="alert alert-danger">
+ * **Note:** Passing a `transclude` function to the $compile function is deprecated, as it
+ *   e.g. will not use the right outer scope. Please pass the transclude function as a
+ *   `parentBoundTranscludeFn` to the link function instead.
+ * </div>
+ *
  * @param {number} maxPriority only apply directives lower than given priority (Only effects the
  *                 root element(s), not their children)
- * @returns {function(scope, cloneAttachFn=)} a link function which is used to bind template
+ * @returns {function(scope, cloneAttachFn=, options=)} a link function which is used to bind template
  * (a DOM element/tree) to a scope. Where:
  *
  *  * `scope` - A {@link ng.$rootScope.Scope Scope} to bind to.
@@ -636,6 +663,19 @@
  *
  *      * `clonedElement` - is a clone of the original `element` passed into the compiler.
  *      * `scope` - is the current scope with which the linking function is working with.
+ *
+ *  * `options` - An optional object hash with linking options. If `options` is provided, then the following
+ *  keys may be used to control linking behavior:
+ *
+ *      * `parentBoundTranscludeFn` - the transclude function made available to
+ *        directives; if given, it will be passed through to the link functions of
+ *        directives found in `element` during compilation.
+ *      * `transcludeControllers` - an object hash with keys that map controller names
+ *        to controller instances; if given, it will make the controllers
+ *        available to directives.
+ *      * `futureParentElement` - defines the parent to which the `cloneAttachFn` will add
+ *        the cloned elements; only needed for transcludes that are allowed to contain non html
+ *        elements (e.g. SVG elements). See also the directive.controller property.
  *
  * Calling the linking function returns the element of the template. It is either the original
  * element passed in, or the clone of the element if the `cloneAttachFn` is provided.
@@ -692,7 +732,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
   // 'on' and be composed of only English letters.
   var EVENT_HANDLER_ATTR_REGEXP = /^(on[a-z]+|formaction)$/;
 
-  function parseIsolateBindings(scope, directiveName) {
+  function parseIsolateBindings(scope, directiveName, isController) {
     var LOCAL_REGEXP = /^\s*([@&]|=(\*?))(\??)\s*(\w*)\s*$/;
 
     var bindings = {};
@@ -702,9 +742,11 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
       if (!match) {
         throw $compileMinErr('iscp',
-            "Invalid isolate scope definition for directive '{0}'." +
+            "Invalid {3} for directive '{0}'." +
             " Definition: {... {1}: '{2}' ...}",
-            directiveName, scopeName, definition);
+            directiveName, scopeName, definition,
+            (isController ? "controller bindings definition" :
+            "isolate scope definition"));
       }
 
       bindings[scopeName] = {
@@ -716,6 +758,50 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
     });
 
     return bindings;
+  }
+
+  function parseDirectiveBindings(directive, directiveName) {
+    var bindings = {
+      isolateScope: null,
+      bindToController: null
+    };
+    if (isObject(directive.scope)) {
+      if (directive.bindToController === true) {
+        bindings.bindToController = parseIsolateBindings(directive.scope,
+                                                         directiveName, true);
+        bindings.isolateScope = {};
+      } else {
+        bindings.isolateScope = parseIsolateBindings(directive.scope,
+                                                     directiveName, false);
+      }
+    }
+    if (isObject(directive.bindToController)) {
+      bindings.bindToController =
+          parseIsolateBindings(directive.bindToController, directiveName, true);
+    }
+    if (isObject(bindings.bindToController)) {
+      var controller = directive.controller;
+      var controllerAs = directive.controllerAs;
+      if (!controller) {
+        // There is no controller, there may or may not be a controllerAs property
+        throw $compileMinErr('noctrl',
+              "Cannot bind to controller without directive '{0}'s controller.",
+              directiveName);
+      } else if (!identifierForController(controller, controllerAs)) {
+        // There is a controller, but no identifier or controllerAs property
+        throw $compileMinErr('noident',
+              "Cannot bind to controller without identifier for directive '{0}'.",
+              directiveName);
+      }
+    }
+    return bindings;
+  }
+
+  function assertValidDirectiveName(name) {
+    var letter = name.charAt(0);
+    if (!letter || letter !== lowercase(letter)) {
+      throw $compileMinErr('baddir', "Directive name '{0}' is invalid. The first character must be a lowercase letter", name);
+    }
   }
 
   /**
@@ -736,6 +822,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
    this.directive = function registerDirective(name, directiveFactory) {
     assertNotHasOwnProperty(name, 'directive');
     if (isString(name)) {
+      assertValidDirectiveName(name);
       assertArg(directiveFactory, 'directiveFactory');
       if (!hasDirectives.hasOwnProperty(name)) {
         hasDirectives[name] = [];
@@ -755,8 +842,10 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
                 directive.name = directive.name || name;
                 directive.require = directive.require || (directive.controller && directive.name);
                 directive.restrict = directive.restrict || 'EA';
-                if (isObject(directive.scope)) {
-                  directive.$$isolateBindings = parseIsolateBindings(directive.scope, directive.name);
+                var bindings = directive.$$bindings =
+                    parseDirectiveBindings(directive, directive.name);
+                if (isObject(bindings.isolateScope)) {
+                  directive.$$isolateBindings = bindings.isolateScope;
                 }
                 directives.push(directive);
               } catch (e) {
@@ -783,7 +872,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
    * Retrieves or overrides the default regular expression that is used for whitelisting of safe
    * urls during a[href] sanitization.
    *
-   * The sanitization is a security measure aimed at prevent XSS attacks via html links.
+   * The sanitization is a security measure aimed at preventing XSS attacks via html links.
    *
    * Any url about to be assigned to a[href] via data-binding is first normalized and turned into
    * an absolute url. Afterwards, the url is matched against the `aHrefSanitizationWhitelist`
@@ -850,7 +939,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
    * * `ng-binding` CSS class
    * * `$binding` data property containing an array of the binding expressions
    *
-   * You may want to use this in production for a significant performance boost. See
+   * You may want to disable this in production for a significant performance boost. See
    * {@link guide/production#disabling-debug-data Disabling Debug Data} for more.
    *
    * The default value is true.
@@ -887,6 +976,21 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
     };
 
     Attributes.prototype = {
+      /**
+       * @ngdoc method
+       * @name $compile.directive.Attributes#$normalize
+       * @kind function
+       *
+       * @description
+       * Converts an attribute name (e.g. dash/colon/underscore-delimited string, optionally prefixed with `x-` or
+       * `data-`) to its normalized, camelCase form.
+       *
+       * Also there is special case for Moz prefix starting with upper case letter.
+       *
+       * For further information check out the guide on {@link guide/directive#matching-directives Matching Directives}
+       *
+       * @param {string} name Name to normalize
+       */
       $normalize: directiveNormalize,
 
 
@@ -1009,16 +1113,16 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
           // for each tuples
           var nbrUrisWith2parts = Math.floor(rawUris.length / 2);
-          for (var i=0; i<nbrUrisWith2parts; i++) {
-            var innerIdx = i*2;
+          for (var i = 0; i < nbrUrisWith2parts; i++) {
+            var innerIdx = i * 2;
             // sanitize the uri
             result += $$sanitizeUri(trim(rawUris[innerIdx]), true);
             // add the descriptor
-            result += (" " + trim(rawUris[innerIdx+1]));
+            result += (" " + trim(rawUris[innerIdx + 1]));
           }
 
           // split the last item into uri and descriptor
-          var lastTuple = trim(rawUris[i*2]).split(/\s/);
+          var lastTuple = trim(rawUris[i * 2]).split(/\s/);
 
           // sanitize the last uri
           result += $$sanitizeUri(trim(lastTuple[0]), true);
@@ -1155,8 +1259,22 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
                            maxPriority, ignoreDirective, previousCompileContext);
       compile.$$addScopeClass($compileNodes);
       var namespace = null;
-      return function publicLinkFn(scope, cloneConnectFn, transcludeControllers, parentBoundTranscludeFn, futureParentElement) {
+      return function publicLinkFn(scope, cloneConnectFn, options) {
         assertArg(scope, 'scope');
+
+        options = options || {};
+        var parentBoundTranscludeFn = options.parentBoundTranscludeFn,
+          transcludeControllers = options.transcludeControllers,
+          futureParentElement = options.futureParentElement;
+
+        // When `parentBoundTranscludeFn` is passed, it is a
+        // `controllersBoundTransclude` function (it was previously passed
+        // as `transclude` to directive.link) so we must unwrap it to get
+        // its `boundTranscludeFn`
+        if (parentBoundTranscludeFn && parentBoundTranscludeFn.$$boundTransclude) {
+          parentBoundTranscludeFn = parentBoundTranscludeFn.$$boundTransclude;
+        }
+
         if (!namespace) {
           namespace = detectNamespaceForChildElements(futureParentElement);
         }
@@ -1198,7 +1316,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
       if (!node) {
         return 'html';
       } else {
-        return nodeName_(node) !== 'foreignobject' && node.toString().match(/SVG/) ? 'svg': 'html';
+        return nodeName_(node) !== 'foreignobject' && node.toString().match(/SVG/) ? 'svg' : 'html';
       }
     }
 
@@ -1289,6 +1407,11 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
             if (nodeLinkFn.scope) {
               childScope = scope.$new();
               compile.$$addScopeInfo(jqLite(node), childScope);
+              var destroyBindings = nodeLinkFn.$$destroyBindings;
+              if (destroyBindings) {
+                nodeLinkFn.$$destroyBindings = null;
+                childScope.$on('$destroyed', destroyBindings);
+              }
             } else {
               childScope = scope;
             }
@@ -1308,7 +1431,8 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
               childBoundTranscludeFn = null;
             }
 
-            nodeLinkFn(childLinkFn, childScope, node, $rootElement, childBoundTranscludeFn);
+            nodeLinkFn(childLinkFn, childScope, node, $rootElement, childBoundTranscludeFn,
+                       nodeLinkFn);
 
           } else if (childLinkFn) {
             childLinkFn(scope, node.childNodes, undefined, parentBoundTranscludeFn);
@@ -1326,7 +1450,11 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
           transcludedScope.$$transcluded = true;
         }
 
-        return transcludeFn(transcludedScope, cloneFn, controllers, previousBoundTranscludeFn, futureParentElement);
+        return transcludeFn(transcludedScope, cloneFn, {
+          parentBoundTranscludeFn: previousBoundTranscludeFn,
+          transcludeControllers: controllers,
+          futureParentElement: futureParentElement
+        });
       };
 
       return boundTranscludeFn;
@@ -1367,7 +1495,10 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
             // support ngAttr attribute binding
             ngAttrName = directiveNormalize(name);
             if (isNgAttr = NG_ATTR_BINDING.test(ngAttrName)) {
-              name = snake_case(ngAttrName.substr(6), '-');
+              name = name.replace(PREFIX_REGEXP, '')
+                .substr(8).replace(/_(.)/g, function(match, letter) {
+                  return letter.toUpperCase();
+                });
             }
 
             var directiveNName = ngAttrName.replace(/(Start|End)$/, '');
@@ -1394,6 +1525,10 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
           // use class as directive
           className = node.className;
+          if (isObject(className)) {
+              // Maybe SVGAnimatedString
+              className = className.animVal;
+          }
           if (isString(className) && className !== '') {
             while (match = CLASS_DIRECTIVE_REGEXP.exec(className)) {
               nName = directiveNormalize(match[2]);
@@ -1506,7 +1641,6 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
       var terminalPriority = -Number.MAX_VALUE,
           newScopeDirective,
           controllerDirectives = previousCompileContext.controllerDirectives,
-          controllers,
           newIsolateScopeDirective = previousCompileContext.newIsolateScopeDirective,
           templateDirective = previousCompileContext.templateDirective,
           nonTlbTranscludeDirective = previousCompileContext.nonTlbTranscludeDirective,
@@ -1564,7 +1698,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
         if (!directive.templateUrl && directive.controller) {
           directiveValue = directive.controller;
-          controllerDirectives = controllerDirectives || {};
+          controllerDirectives = controllerDirectives || createMap();
           assertNoDuplicate("'" + directiveName + "' controller",
               controllerDirectives[directiveName], directive, $compileNode);
           controllerDirectives[directiveName] = directive;
@@ -1732,53 +1866,77 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
 
       function getControllers(directiveName, require, $element, elementControllers) {
-        var value, retrievalMethod = 'data', optional = false;
-        var $searchElement = $element;
-        var match;
+        var value;
+
         if (isString(require)) {
-          match = require.match(REQUIRE_PREFIX_REGEXP);
-          require = require.substring(match[0].length);
+          var match = require.match(REQUIRE_PREFIX_REGEXP);
+          var name = require.substring(match[0].length);
+          var inheritType = match[1] || match[3];
+          var optional = match[2] === '?';
 
-          if (match[3]) {
-            if (match[1]) match[3] = null;
-            else match[1] = match[3];
-          }
-          if (match[1] === '^') {
-            retrievalMethod = 'inheritedData';
-          } else if (match[1] === '^^') {
-            retrievalMethod = 'inheritedData';
-            $searchElement = $element.parent();
-          }
-          if (match[2] === '?') {
-            optional = true;
+          //If only parents then start at the parent element
+          if (inheritType === '^^') {
+            $element = $element.parent();
+          //Otherwise attempt getting the controller from elementControllers in case
+          //the element is transcluded (and has no data) and to avoid .data if possible
+          } else {
+            value = elementControllers && elementControllers[name];
+            value = value && value.instance;
           }
 
-          value = null;
-
-          if (elementControllers && retrievalMethod === 'data') {
-            if (value = elementControllers[require]) {
-              value = value.instance;
-            }
+          if (!value) {
+            var dataName = '$' + name + 'Controller';
+            value = inheritType ? $element.inheritedData(dataName) : $element.data(dataName);
           }
-          value = value || $searchElement[retrievalMethod]('$' + require + 'Controller');
 
           if (!value && !optional) {
             throw $compileMinErr('ctreq',
                 "Controller '{0}', required by directive '{1}', can't be found!",
-                require, directiveName);
+                name, directiveName);
           }
-          return value;
         } else if (isArray(require)) {
           value = [];
-          forEach(require, function(require) {
-            value.push(getControllers(directiveName, require, $element, elementControllers));
-          });
+          for (var i = 0, ii = require.length; i < ii; i++) {
+            value[i] = getControllers(directiveName, require[i], $element, elementControllers);
+          }
         }
-        return value;
+
+        return value || null;
       }
 
+      function setupControllers($element, attrs, transcludeFn, controllerDirectives, isolateScope, scope) {
+        var elementControllers = createMap();
+        for (var controllerKey in controllerDirectives) {
+          var directive = controllerDirectives[controllerKey];
+          var locals = {
+            $scope: directive === newIsolateScopeDirective || directive.$$isolateScope ? isolateScope : scope,
+            $element: $element,
+            $attrs: attrs,
+            $transclude: transcludeFn
+          };
 
-      function nodeLinkFn(childLinkFn, scope, linkNode, $rootElement, boundTranscludeFn) {
+          var controller = directive.controller;
+          if (controller == '@') {
+            controller = attrs[directive.name];
+          }
+
+          var controllerInstance = $controller(controller, locals, true, directive.controllerAs);
+
+          // For directives with element transclusion the element is a comment,
+          // but jQuery .data doesn't support attaching data to comment nodes as it's hard to
+          // clean up (http://bugs.jquery.com/ticket/8335).
+          // Instead, we save the controllers for the element in a local hash and attach to .data
+          // later, once we have the actual element.
+          elementControllers[directive.name] = controllerInstance;
+          if (!hasElementTranscludeDirective) {
+            $element.data('$' + directive.name + 'Controller', controllerInstance.instance);
+          }
+        }
+        return elementControllers;
+      }
+
+      function nodeLinkFn(childLinkFn, scope, linkNode, $rootElement, boundTranscludeFn,
+                          thisLinkFn) {
         var i, ii, linkFn, controller, isolateScope, elementControllers, transcludeFn, $element,
             attrs;
 
@@ -1794,128 +1952,58 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
           isolateScope = scope.$new(true);
         }
 
-        transcludeFn = boundTranscludeFn && controllersBoundTransclude;
+        if (boundTranscludeFn) {
+          // track `boundTranscludeFn` so it can be unwrapped if `transcludeFn`
+          // is later passed as `parentBoundTranscludeFn` to `publicLinkFn`
+          transcludeFn = controllersBoundTransclude;
+          transcludeFn.$$boundTransclude = boundTranscludeFn;
+        }
+
         if (controllerDirectives) {
-          // TODO: merge `controllers` and `elementControllers` into single object.
-          controllers = {};
-          elementControllers = {};
-          forEach(controllerDirectives, function(directive) {
-            var locals = {
-              $scope: directive === newIsolateScopeDirective || directive.$$isolateScope ? isolateScope : scope,
-              $element: $element,
-              $attrs: attrs,
-              $transclude: transcludeFn
-            }, controllerInstance;
-
-            controller = directive.controller;
-            if (controller == '@') {
-              controller = attrs[directive.name];
-            }
-
-            controllerInstance = $controller(controller, locals, true, directive.controllerAs);
-
-            // For directives with element transclusion the element is a comment,
-            // but jQuery .data doesn't support attaching data to comment nodes as it's hard to
-            // clean up (http://bugs.jquery.com/ticket/8335).
-            // Instead, we save the controllers for the element in a local hash and attach to .data
-            // later, once we have the actual element.
-            elementControllers[directive.name] = controllerInstance;
-            if (!hasElementTranscludeDirective) {
-              $element.data('$' + directive.name + 'Controller', controllerInstance.instance);
-            }
-
-            controllers[directive.name] = controllerInstance;
-          });
+          elementControllers = setupControllers($element, attrs, transcludeFn, controllerDirectives, isolateScope, scope);
         }
 
         if (newIsolateScopeDirective) {
+          // Initialize isolate scope bindings for new isolate scope directive.
           compile.$$addScopeInfo($element, isolateScope, true, !(templateDirective && (templateDirective === newIsolateScopeDirective ||
               templateDirective === newIsolateScopeDirective.$$originalDirective)));
           compile.$$addScopeClass($element, true);
-
-          var isolateScopeController = controllers && controllers[newIsolateScopeDirective.name];
-          var isolateBindingContext = isolateScope;
-          if (isolateScopeController && isolateScopeController.identifier &&
-              newIsolateScopeDirective.bindToController === true) {
-            isolateBindingContext = isolateScopeController.instance;
-          }
-
-          forEach(isolateScope.$$isolateBindings = newIsolateScopeDirective.$$isolateBindings, function(definition, scopeName) {
-            var attrName = definition.attrName,
-                optional = definition.optional,
-                mode = definition.mode, // @, =, or &
-                lastValue,
-                parentGet, parentSet, compare;
-
-            switch (mode) {
-
-              case '@':
-                attrs.$observe(attrName, function(value) {
-                  isolateBindingContext[scopeName] = value;
-                });
-                attrs.$$observers[attrName].$$scope = scope;
-                if (attrs[attrName]) {
-                  // If the attribute has been provided then we trigger an interpolation to ensure
-                  // the value is there for use in the link fn
-                  isolateBindingContext[scopeName] = $interpolate(attrs[attrName])(scope);
-                }
-                break;
-
-              case '=':
-                if (optional && !attrs[attrName]) {
-                  return;
-                }
-                parentGet = $parse(attrs[attrName]);
-                if (parentGet.literal) {
-                  compare = equals;
-                } else {
-                  compare = function(a, b) { return a === b || (a !== a && b !== b); };
-                }
-                parentSet = parentGet.assign || function() {
-                  // reset the change, or we will throw this exception on every $digest
-                  lastValue = isolateBindingContext[scopeName] = parentGet(scope);
-                  throw $compileMinErr('nonassign',
-                      "Expression '{0}' used with directive '{1}' is non-assignable!",
-                      attrs[attrName], newIsolateScopeDirective.name);
-                };
-                lastValue = isolateBindingContext[scopeName] = parentGet(scope);
-                var parentValueWatch = function parentValueWatch(parentValue) {
-                  if (!compare(parentValue, isolateBindingContext[scopeName])) {
-                    // we are out of sync and need to copy
-                    if (!compare(parentValue, lastValue)) {
-                      // parent changed and it has precedence
-                      isolateBindingContext[scopeName] = parentValue;
-                    } else {
-                      // if the parent can be assigned then do so
-                      parentSet(scope, parentValue = isolateBindingContext[scopeName]);
-                    }
-                  }
-                  return lastValue = parentValue;
-                };
-                parentValueWatch.$stateful = true;
-                var unwatch;
-                if (definition.collection) {
-                  unwatch = scope.$watchCollection(attrs[attrName], parentValueWatch);
-                } else {
-                  unwatch = scope.$watch($parse(attrs[attrName], parentValueWatch), null, parentGet.literal);
-                }
-                isolateScope.$on('$destroy', unwatch);
-                break;
-
-              case '&':
-                parentGet = $parse(attrs[attrName]);
-                isolateBindingContext[scopeName] = function(locals) {
-                  return parentGet(scope, locals);
-                };
-                break;
-            }
-          });
+          isolateScope.$$isolateBindings =
+              newIsolateScopeDirective.$$isolateBindings;
+          initializeDirectiveBindings(scope, attrs, isolateScope,
+                                      isolateScope.$$isolateBindings,
+                                      newIsolateScopeDirective, isolateScope);
         }
-        if (controllers) {
-          forEach(controllers, function(controller) {
-            controller();
-          });
-          controllers = null;
+        if (elementControllers) {
+          // Initialize bindToController bindings for new/isolate scopes
+          var scopeDirective = newIsolateScopeDirective || newScopeDirective;
+          var bindings;
+          var controllerForBindings;
+          if (scopeDirective && elementControllers[scopeDirective.name]) {
+            bindings = scopeDirective.$$bindings.bindToController;
+            controller = elementControllers[scopeDirective.name];
+
+            if (controller && controller.identifier && bindings) {
+              controllerForBindings = controller;
+              thisLinkFn.$$destroyBindings =
+                  initializeDirectiveBindings(scope, attrs, controller.instance,
+                                              bindings, scopeDirective);
+            }
+          }
+          for (i in elementControllers) {
+            controller = elementControllers[i];
+            var controllerResult = controller();
+            if (controllerResult !== controller.instance) {
+              controller.instance = controllerResult;
+              $element.data('$' + directive.name + 'Controller', controllerResult);
+              if (controller === controllerForBindings) {
+                // Remove and re-install bindToController bindings
+                thisLinkFn.$$destroyBindings();
+                thisLinkFn.$$destroyBindings =
+                  initializeDirectiveBindings(scope, attrs, controllerResult, bindings, scopeDirective);
+              }
+            }
+          }
         }
 
         // PRELINKING
@@ -2001,7 +2089,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
       var match = null;
       if (hasDirectives.hasOwnProperty(name)) {
         for (var directive, directives = $injector.get(name + Suffix),
-            i = 0, ii = directives.length; i<ii; i++) {
+            i = 0, ii = directives.length; i < ii; i++) {
           try {
             directive = directives[i];
             if ((maxPriority === undefined || maxPriority > directive.priority) &&
@@ -2030,7 +2118,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
     function directiveIsMultiElement(name) {
       if (hasDirectives.hasOwnProperty(name)) {
         for (var directive, directives = $injector.get(name + Suffix),
-            i = 0, ii = directives.length; i<ii; i++) {
+            i = 0, ii = directives.length; i < ii; i++) {
           directive = directives[i];
           if (directive.multiElement) {
             return true;
@@ -2089,8 +2177,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
           afterTemplateChildLinkFn,
           beforeTemplateCompileNode = $compileNode[0],
           origAsyncDirective = directives.shift(),
-          // The fact that we have to copy and patch the directive seems wrong!
-          derivedSyncDirective = extend({}, origAsyncDirective, {
+          derivedSyncDirective = inherit(origAsyncDirective, {
             templateUrl: null, transclude: null, replace: null, $$originalDirective: origAsyncDirective
           }),
           templateUrl = (isFunction(origAsyncDirective.templateUrl))
@@ -2174,7 +2261,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
               childBoundTranscludeFn = boundTranscludeFn;
             }
             afterTemplateNodeLinkFn(afterTemplateChildLinkFn, scope, linkNode, $rootElement,
-              childBoundTranscludeFn);
+              childBoundTranscludeFn, afterTemplateNodeLinkFn);
           }
           linkQueue = null;
         });
@@ -2183,15 +2270,16 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
         var childBoundTranscludeFn = boundTranscludeFn;
         if (scope.$$destroyed) return;
         if (linkQueue) {
-          linkQueue.push(scope);
-          linkQueue.push(node);
-          linkQueue.push(rootElement);
-          linkQueue.push(childBoundTranscludeFn);
+          linkQueue.push(scope,
+                         node,
+                         rootElement,
+                         childBoundTranscludeFn);
         } else {
           if (afterTemplateNodeLinkFn.transcludeOnThisElement) {
             childBoundTranscludeFn = createBoundTranscludeFn(scope, afterTemplateNodeLinkFn.transclude, boundTranscludeFn);
           }
-          afterTemplateNodeLinkFn(afterTemplateChildLinkFn, scope, node, rootElement, childBoundTranscludeFn);
+          afterTemplateNodeLinkFn(afterTemplateChildLinkFn, scope, node, rootElement, childBoundTranscludeFn,
+                                  afterTemplateNodeLinkFn);
         }
       };
     }
@@ -2249,7 +2337,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
       case 'svg':
       case 'math':
         var wrapper = document.createElement('div');
-        wrapper.innerHTML = '<'+type+'>'+template+'</'+type+'>';
+        wrapper.innerHTML = '<' + type + '>' + template + '</' + type + '>';
         return wrapper.childNodes[0].childNodes;
       default:
         return template;
@@ -2273,7 +2361,10 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
 
     function addAttrInterpolateDirective(node, directives, value, name, allOrNothing) {
-      var interpolateFn = $interpolate(value, true);
+      var trustedContext = getTrustedContext(node, name);
+      allOrNothing = ALL_OR_NOTHING_ATTRS[name] || allOrNothing;
+
+      var interpolateFn = $interpolate(value, true, trustedContext, allOrNothing);
 
       // no interpolation found -> ignore
       if (!interpolateFn) return;
@@ -2298,15 +2389,15 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
                           "ng- versions (such as ng-click instead of onclick) instead.");
                 }
 
-                // If the attribute was removed, then we are done
-                if (!attr[name]) {
-                  return;
+                // If the attribute has changed since last $interpolate()ed
+                var newValue = attr[name];
+                if (newValue !== value) {
+                  // we need to interpolate again since the attribute value has been updated
+                  // (e.g. by another directive's compile function)
+                  // ensure unset/empty values make interpolateFn falsy
+                  interpolateFn = newValue && $interpolate(newValue, true, trustedContext, allOrNothing);
+                  value = newValue;
                 }
-
-                // we need to interpolate again, in case the attribute value has been updated
-                // (e.g. by another directive's compile function)
-                interpolateFn = $interpolate(attr[name], true, getTrustedContext(node, name),
-                    ALL_OR_NOTHING_ATTRS[name] || allOrNothing);
 
                 // if attribute was updated so that there is no interpolation going on we don't want to
                 // register any observers
@@ -2435,19 +2526,108 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
         $exceptionHandler(e, startingTag($element));
       }
     }
+
+
+    // Set up $watches for isolate scope and controller bindings. This process
+    // only occurs for isolate scopes and new scopes with controllerAs.
+    function initializeDirectiveBindings(scope, attrs, destination, bindings,
+                                         directive, newScope) {
+      var onNewScopeDestroyed;
+      forEach(bindings, function(definition, scopeName) {
+        var attrName = definition.attrName,
+        optional = definition.optional,
+        mode = definition.mode, // @, =, or &
+        lastValue,
+        parentGet, parentSet, compare;
+
+        switch (mode) {
+
+          case '@':
+            attrs.$observe(attrName, function(value) {
+              destination[scopeName] = value;
+            });
+            attrs.$$observers[attrName].$$scope = scope;
+            if (attrs[attrName]) {
+              // If the attribute has been provided then we trigger an interpolation to ensure
+              // the value is there for use in the link fn
+              destination[scopeName] = $interpolate(attrs[attrName])(scope);
+            }
+            break;
+
+          case '=':
+            if (optional && !attrs[attrName]) {
+              return;
+            }
+            parentGet = $parse(attrs[attrName]);
+            if (parentGet.literal) {
+              compare = equals;
+            } else {
+              compare = function(a, b) { return a === b || (a !== a && b !== b); };
+            }
+            parentSet = parentGet.assign || function() {
+              // reset the change, or we will throw this exception on every $digest
+              lastValue = destination[scopeName] = parentGet(scope);
+              throw $compileMinErr('nonassign',
+                  "Expression '{0}' used with directive '{1}' is non-assignable!",
+                  attrs[attrName], directive.name);
+            };
+            lastValue = destination[scopeName] = parentGet(scope);
+            var parentValueWatch = function parentValueWatch(parentValue) {
+              if (!compare(parentValue, destination[scopeName])) {
+                // we are out of sync and need to copy
+                if (!compare(parentValue, lastValue)) {
+                  // parent changed and it has precedence
+                  destination[scopeName] = parentValue;
+                } else {
+                  // if the parent can be assigned then do so
+                  parentSet(scope, parentValue = destination[scopeName]);
+                }
+              }
+              return lastValue = parentValue;
+            };
+            parentValueWatch.$stateful = true;
+            var unwatch;
+            if (definition.collection) {
+              unwatch = scope.$watchCollection(attrs[attrName], parentValueWatch);
+            } else {
+              unwatch = scope.$watch($parse(attrs[attrName], parentValueWatch), null, parentGet.literal);
+            }
+            onNewScopeDestroyed = (onNewScopeDestroyed || []);
+            onNewScopeDestroyed.push(unwatch);
+            break;
+
+          case '&':
+            // Don't assign Object.prototype method to scope
+            if (!attrs.hasOwnProperty(attrName) && optional) break;
+
+            parentGet = $parse(attrs[attrName]);
+
+            // Don't assign noop to destination if expression is not valid
+            if (parentGet === noop && optional) break;
+
+            destination[scopeName] = function(locals) {
+              return parentGet(scope, locals);
+            };
+            break;
+        }
+      });
+      var destroyBindings = onNewScopeDestroyed ? function destroyBindings() {
+        for (var i = 0, ii = onNewScopeDestroyed.length; i < ii; ++i) {
+          onNewScopeDestroyed[i]();
+        }
+      } : noop;
+      if (newScope && destroyBindings !== noop) {
+        newScope.$on('$destroy', destroyBindings);
+        return noop;
+      }
+      return destroyBindings;
+    }
   }];
 }
 
 var PREFIX_REGEXP = /^((?:x|data)[\:\-_])/i;
 /**
  * Converts all accepted directives format into proper directive name.
- * All of these will become 'myDirective':
- *   my:Directive
- *   my-directive
- *   x-my-directive
- *   data-my:directive
- *
- * Also there is special case for Moz prefix starting with upper case letter.
  * @param name Name to normalize
  */
 function directiveNormalize(name) {

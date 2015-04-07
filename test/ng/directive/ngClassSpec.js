@@ -63,6 +63,17 @@ describe('ngClass', function() {
     expect(element.hasClass('AnotB')).toBeFalsy();
   }));
 
+  it('should support adding multiple classes via an array mixed with conditionally via a map', inject(function($rootScope, $compile) {
+    element = $compile('<div class="existing" ng-class="[\'A\', {\'B\': condition}]"></div>')($rootScope);
+    $rootScope.$digest();
+    expect(element.hasClass('existing')).toBeTruthy();
+    expect(element.hasClass('A')).toBeTruthy();
+    expect(element.hasClass('B')).toBeFalsy();
+    $rootScope.condition = true;
+    $rootScope.$digest();
+    expect(element.hasClass('B')).toBeTruthy();
+
+  }));
 
   it('should remove classes when the referenced object is the same but its property is changed',
     inject(function($rootScope, $compile) {
@@ -85,6 +96,16 @@ describe('ngClass', function() {
     expect(element.hasClass('existing')).toBeTruthy();
     expect(element.hasClass('A')).toBeTruthy();
     expect(element.hasClass('B')).toBeTruthy();
+  }));
+
+
+  it('should support adding multiple classes via a space delimited string inside an array', inject(function($rootScope, $compile) {
+    element = $compile('<div class="existing" ng-class="[\'A B\', \'C\']"></div>')($rootScope);
+    $rootScope.$digest();
+    expect(element.hasClass('existing')).toBeTruthy();
+    expect(element.hasClass('A')).toBeTruthy();
+    expect(element.hasClass('B')).toBeTruthy();
+    expect(element.hasClass('C')).toBeTruthy();
   }));
 
 

@@ -1066,9 +1066,9 @@ describe("ngAnimate", function() {
           var animationDone;
           var animationStyles;
           var proxyAnimation = function() {
-            var limit = arguments.length-1;
+            var limit = arguments.length - 1;
             animationStyles = arguments[limit];
-            animationDone = arguments[limit-1];
+            animationDone = arguments[limit - 1];
           };
           module(function($animateProvider) {
             $animateProvider.register('.capture', function() {
@@ -1381,6 +1381,25 @@ describe("ngAnimate", function() {
             expect(element.attr('style')).toContain('border-color: blue');
           }));
 
+          it("should not apply a piggy-back-transition if the styles object contains no styles",
+            inject(function($compile, $animate, $rootScope, $sniffer) {
+
+            if (!$sniffer.animations) return;
+
+            $animate.enabled(true);
+            ss.addRule('.on', '-webkit-animation: 1s super-animation; animation: 1s super-animation;');
+
+            element = $compile(html('<div>1</div>'))($rootScope);
+
+            $animate.addClass(element, 'on', {
+              to: {}
+            });
+
+            $rootScope.$digest();
+            $animate.triggerReflow();
+            expect(element.attr('style')).not.toMatch(/transition/);
+          }));
+
           it("should pause the playstate when performing a stagger animation",
             inject(function($animate, $rootScope, $compile, $sniffer, $timeout) {
 
@@ -1439,7 +1458,7 @@ describe("ngAnimate", function() {
             $timeout.verifyNoPendingTasks();
 
             expect(elements[0].attr('style')).toBeFalsy();
-            for (i=1;i<5;i++) {
+            for (i = 1; i < 5; i++) {
               expect(elements[i].attr('style')).not.toMatch(/animation-play-state:\s*paused/);
             }
           }));
@@ -2815,7 +2834,7 @@ describe("ngAnimate", function() {
               function capture(event) {
                 return function(element, add, remove, styles, done) {
                   //some animations only have one extra param
-                  done = arguments[arguments.length-2]; //the last one is the styles array
+                  done = arguments[arguments.length - 2]; //the last one is the styles array
                   captures[event]=done;
                 };
               }
@@ -4288,7 +4307,7 @@ describe("ngAnimate", function() {
         $rootElement.append(element);
         jqLite($document[0].body).append($rootElement);
 
-        for (var i=0;i<20;i++) {
+        for (var i = 0; i < 20; i++) {
           kid = $compile('<div class="kid"></div>')($rootScope);
           $animate.enter(kid, element);
         }
@@ -4300,8 +4319,8 @@ describe("ngAnimate", function() {
         dealoc(element);
         count = 0;
 
-        for (i=0;i<20;i++) {
-          kid = $compile('<div class="kid c-'+i+'"></div>')($rootScope);
+        for (i = 0; i < 20; i++) {
+          kid = $compile('<div class="kid c-' + i + '"></div>')($rootScope);
           $animate.enter(kid, element);
         }
 
@@ -5316,7 +5335,7 @@ describe("ngAnimate", function() {
         //jQuery doesn't handle SVG elements natively. Instead, an add-on library
         //is required which is called jquery.svg.js. Therefore, when jQuery is
         //active here there is no point to test this since it won't work by default.
-        if (!$sniffer.transitions || !_jqLiteMode) return;
+        if (!$sniffer.transitions) return;
 
         ss.addRule('circle.ng-enter', '-webkit-transition:1s linear all;' +
                                               'transition:1s linear all;');
@@ -5336,13 +5355,13 @@ describe("ngAnimate", function() {
 
         var child = element.find('circle');
 
-        expect(child.hasClass('ng-enter')).toBe(true);
-        expect(child.hasClass('ng-enter-active')).toBe(true);
+        expect(jqLiteHasClass(child[0], 'ng-enter')).toBe(true);
+        expect(jqLiteHasClass(child[0], 'ng-enter-active')).toBe(true);
 
         browserTrigger(child, 'transitionend', { timeStamp: Date.now() + 1000, elapsedTime: 1 });
 
-        expect(child.hasClass('ng-enter')).toBe(false);
-        expect(child.hasClass('ng-enter-active')).toBe(false);
+        expect(jqLiteHasClass(child[0], 'ng-enter')).toBe(false);
+        expect(jqLiteHasClass(child[0], 'ng-enter-active')).toBe(false);
       }));
 
 

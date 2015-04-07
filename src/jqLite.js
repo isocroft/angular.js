@@ -1,5 +1,16 @@
 'use strict';
 
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+ *     Any commits to this file should be reviewed with security in mind.  *
+ *   Changes to this file can potentially create security vulnerabilities. *
+ *          An approval from 2 Core members with history of modifying      *
+ *                         this file is required.                          *
+ *                                                                         *
+ *  Does the change somehow allow for arbitrary javascript to be executed? *
+ *    Or allows for someone to change the prototype of built-in objects?   *
+ *     Or gives undesired access to variables likes document or window?    *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
 /* global JQLitePrototype: true,
   addEventListenerFn: true,
   removeEventListenerFn: true,
@@ -87,10 +98,12 @@
  *   `'ngModel'`).
  * - `injector()` - retrieves the injector of the current element or its parent.
  * - `scope()` - retrieves the {@link ng.$rootScope.Scope scope} of the current
- *   element or its parent.
+ *   element or its parent. Requires {@link guide/production#disabling-debug-data Debug Data} to
+ *   be enabled.
  * - `isolateScope()` - retrieves an isolate {@link ng.$rootScope.Scope scope} if one is attached directly to the
  *   current element. This getter should be used only on elements that contain a directive which starts a new isolate
  *   scope. Calling `scope()` on this element always returns the original non-isolate scope.
+ *   Requires {@link guide/production#disabling-debug-data Debug Data} to be enabled.
  * - `inheritedData()` - same as `data()`, but walks up the DOM until a value is found or the top
  *   parent element is reached.
  *
@@ -481,7 +494,7 @@ var JQLitePrototype = JQLite.prototype = {
     }
 
     // check if document is already loaded
-    if (document.readyState === 'complete'){
+    if (document.readyState === 'complete') {
       setTimeout(trigger);
     } else {
       this.on('DOMContentLoaded', trigger); // works for modern browsers and IE9
@@ -585,6 +598,10 @@ forEach({
   },
 
   attr: function(element, name, value) {
+    var nodeType = element.nodeType;
+    if (nodeType === NODE_TYPE_TEXT || nodeType === NODE_TYPE_ATTRIBUTE || nodeType === NODE_TYPE_COMMENT) {
+      return;
+    }
     var lowercasedName = lowercase(name);
     if (BOOLEAN_ATTR[lowercasedName]) {
       if (isDefined(value)) {
@@ -597,7 +614,7 @@ forEach({
         }
       } else {
         return (element[name] ||
-                 (element.attributes.getNamedItem(name)|| noop).specified)
+                 (element.attributes.getNamedItem(name) || noop).specified)
                ? lowercasedName
                : undefined;
       }
@@ -802,7 +819,7 @@ forEach({
             var target = this, related = event.relatedTarget;
             // For mousenter/leave call the handler if related is outside the target.
             // NB: No relatedTarget if the mouse left/entered the browser window
-            if (!related || (related !== target && !target.contains(related))){
+            if (!related || (related !== target && !target.contains(related))) {
               handle(event, type);
             }
           });
@@ -849,8 +866,9 @@ forEach({
   children: function(element) {
     var children = [];
     forEach(element.childNodes, function(element) {
-      if (element.nodeType === NODE_TYPE_ELEMENT)
+      if (element.nodeType === NODE_TYPE_ELEMENT) {
         children.push(element);
+      }
     });
     return children;
   },
@@ -1001,3 +1019,24 @@ forEach({
   JQLite.prototype.bind = JQLite.prototype.on;
   JQLite.prototype.unbind = JQLite.prototype.off;
 });
+
+
+// Provider for private $$jqLite service
+function $$jqLiteProvider() {
+  this.$get = function $$jqLite() {
+    return extend(JQLite, {
+      hasClass: function(node, classes) {
+        if (node.attr) node = node[0];
+        return jqLiteHasClass(node, classes);
+      },
+      addClass: function(node, classes) {
+        if (node.attr) node = node[0];
+        return jqLiteAddClass(node, classes);
+      },
+      removeClass: function(node, classes) {
+        if (node.attr) node = node[0];
+        return jqLiteRemoveClass(node, classes);
+      }
+    });
+  };
+}

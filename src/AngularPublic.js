@@ -65,7 +65,10 @@
   $FilterProvider,
   $InterpolateProvider,
   $IntervalProvider,
+  $$HashMapProvider,
   $HttpProvider,
+  $HttpParamSerializerProvider,
+  $HttpParamSerializerJQLikeProvider,
   $HttpBackendProvider,
   $LocationProvider,
   $LogProvider,
@@ -83,7 +86,9 @@
   $TimeoutProvider,
   $$RAFProvider,
   $$AsyncCallbackProvider,
-  $WindowProvider
+  $WindowProvider,
+  $$jqLiteProvider,
+  $$CookieReaderProvider
 */
 
 
@@ -115,6 +120,7 @@ function publishExternalAPI(angular) {
     'bootstrap': bootstrap,
     'copy': copy,
     'extend': extend,
+    'merge': merge,
     'equals': equals,
     'element': jqLite,
     'forEach': forEach,
@@ -220,6 +226,8 @@ function publishExternalAPI(angular) {
         $interpolate: $InterpolateProvider,
         $interval: $IntervalProvider,
         $http: $HttpProvider,
+        $httpParamSerializer: $HttpParamSerializerProvider,
+        $httpParamSerializerJQLike: $HttpParamSerializerJQLikeProvider,
         $httpBackend: $HttpBackendProvider,
         $location: $LocationProvider,
         $log: $LogProvider,
@@ -236,7 +244,10 @@ function publishExternalAPI(angular) {
         $timeout: $TimeoutProvider,
         $window: $WindowProvider,
         $$rAF: $$RAFProvider,
-        $$asyncCallback: $$AsyncCallbackProvider
+        $$asyncCallback: $$AsyncCallbackProvider,
+        $$jqLite: $$jqLiteProvider,
+        $$HashMap: $$HashMapProvider,
+        $$cookieReader: $$CookieReaderProvider
       });
     }
   ]);

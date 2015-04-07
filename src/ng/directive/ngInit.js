@@ -9,7 +9,7 @@
  * The `ngInit` directive allows you to evaluate an expression in the
  * current scope.
  *
- * <div class="alert alert-error">
+ * <div class="alert alert-danger">
  * The only appropriate use of `ngInit` is for aliasing special properties of
  * {@link ng.directive:ngRepeat `ngRepeat`}, as seen in the demo below. Besides this case, you
  * should use {@link guide/controller controllers} rather than `ngInit`
@@ -19,7 +19,7 @@
  * **Note**: If you have assignment in `ngInit` along with {@link ng.$filter `$filter`}, make
  * sure you have parenthesis for correct precedence:
  * <pre class="prettyprint">
- *   <div ng-init="test1 = (data | orderBy:'name')"></div>
+ * `<div ng-init="test1 = (data | orderBy:'name')"></div>`
  * </pre>
  * </div>
  *

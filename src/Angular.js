@@ -22,14 +22,14 @@
   nodeName_: true,
   isArrayLike: true,
   forEach: true,
-  sortedKeys: true,
   forEachSorted: true,
   reverseParams: true,
   nextUid: true,
   setHashKey: true,
   extend: true,
-  int: true,
+  toInt: true,
   inherit: true,
+  merge: true,
   noop: true,
   identity: true,
   valueFn: true,
@@ -45,6 +45,7 @@
   isWindow: true,
   isScope: true,
   isFile: true,
+  isFormData: true,
   isBlob: true,
   isBoolean: true,
   isPromiseLike: true,
@@ -58,12 +59,15 @@
   shallowCopy: true,
   equals: true,
   csp: true,
+  jq: true,
   concat: true,
   sliceArgs: true,
   bind: true,
   toJsonReplacer: true,
   toJson: true,
   fromJson: true,
+  convertTimezoneToLocal: true,
+  timezoneToOffset: true,
   startingTag: true,
   tryDecodeURIComponent: true,
   parseKeyValue: true,
@@ -84,6 +88,7 @@
   createMap: true,
 
   NODE_TYPE_ELEMENT: true,
+  NODE_TYPE_ATTRIBUTE: true,
   NODE_TYPE_TEXT: true,
   NODE_TYPE_COMMENT: true,
   NODE_TYPE_DOCUMENT: true,
@@ -162,8 +167,8 @@ if ('i' !== 'I'.toLowerCase()) {
 }
 
 
-var /** holds major version number for IE or NaN for real browsers */
-    msie,
+var
+    msie,             // holds major version number for IE, or NaN if UA is not IE.
     jqLite,           // delay binding since jQuery could be loaded after us.
     jQuery,           // delay binding
     slice             = [].slice,
@@ -271,12 +276,8 @@ function forEach(obj, iterator, context) {
   return obj;
 }
 
-function sortedKeys(obj) {
-  return Object.keys(obj).sort();
-}
-
 function forEachSorted(obj, iterator, context) {
-  var keys = sortedKeys(obj);
+  var keys = Object.keys(obj).sort();
   for (var i = 0; i < keys.length; i++) {
     iterator.call(context, obj[keys[i]], keys[i]);
   }
@@ -316,10 +317,34 @@ function nextUid() {
 function setHashKey(obj, h) {
   if (h) {
     obj.$$hashKey = h;
-  }
-  else {
+  } else {
     delete obj.$$hashKey;
   }
+}
+
+
+function baseExtend(dst, objs, deep) {
+  var h = dst.$$hashKey;
+
+  for (var i = 0, ii = objs.length; i < ii; ++i) {
+    var obj = objs[i];
+    if (!isObject(obj) && !isFunction(obj)) continue;
+    var keys = Object.keys(obj);
+    for (var j = 0, jj = keys.length; j < jj; j++) {
+      var key = keys[j];
+      var src = obj[key];
+
+      if (deep && isObject(src)) {
+        if (!isObject(dst[key])) dst[key] = isArray(src) ? [] : {};
+        baseExtend(dst[key], [src], true);
+      } else {
+        dst[key] = src;
+      }
+    }
+  }
+
+  setHashKey(dst, h);
+  return dst;
 }
 
 /**
@@ -332,37 +357,50 @@ function setHashKey(obj, h) {
  * Extends the destination object `dst` by copying own enumerable properties from the `src` object(s)
  * to `dst`. You can specify multiple `src` objects. If you want to preserve original objects, you can do so
  * by passing an empty object as the target: `var object = angular.extend({}, object1, object2)`.
- * Note: Keep in mind that `angular.extend` does not support recursive merge (deep copy).
+ *
+ * **Note:** Keep in mind that `angular.extend` does not support recursive merge (deep copy). Use
+ * {@link angular.merge} for this.
  *
  * @param {Object} dst Destination object.
  * @param {...Object} src Source object(s).
  * @returns {Object} Reference to `dst`.
  */
 function extend(dst) {
-  var h = dst.$$hashKey;
-
-  for (var i = 1, ii = arguments.length; i < ii; i++) {
-    var obj = arguments[i];
-    if (obj) {
-      var keys = Object.keys(obj);
-      for (var j = 0, jj = keys.length; j < jj; j++) {
-        var key = keys[j];
-        dst[key] = obj[key];
-      }
-    }
-  }
-
-  setHashKey(dst, h);
-  return dst;
+  return baseExtend(dst, slice.call(arguments, 1), false);
 }
 
-function int(str) {
+
+/**
+* @ngdoc function
+* @name angular.merge
+* @module ng
+* @kind function
+*
+* @description
+* Deeply extends the destination object `dst` by copying own enumerable properties from the `src` object(s)
+* to `dst`. You can specify multiple `src` objects. If you want to preserve original objects, you can do so
+* by passing an empty object as the target: `var object = angular.merge({}, object1, object2)`.
+*
+* Unlike {@link angular.extend extend()}, `merge()` recursively descends into object properties of source
+* objects, performing a deep copy.
+*
+* @param {Object} dst Destination object.
+* @param {...Object} src Source object(s).
+* @returns {Object} Reference to `dst`.
+*/
+function merge(dst) {
+  return baseExtend(dst, slice.call(arguments, 1), true);
+}
+
+
+
+function toInt(str) {
   return parseInt(str, 10);
 }
 
 
 function inherit(parent, extra) {
-  return extend(new (extend(function() {}, {prototype:parent}))(), extra);
+  return extend(Object.create(parent), extra);
 }
 
 /**
@@ -400,6 +438,8 @@ noop.$inject = [];
        return (transformationFn || angular.identity)(value);
      };
    ```
+  * @param {*} value to be returned.
+  * @returns {*} the value passed in.
  */
 function identity($) {return $;}
 identity.$inject = [];
@@ -479,6 +519,12 @@ function isString(value) {return typeof value === 'string';}
  *
  * @description
  * Determines if a reference is a `Number`.
+ *
+ * This includes the "special" numbers `NaN`, `+Infinity` and `-Infinity`.
+ *
+ * If you wish to exclude these then you can use the native
+ * [`isFinite'](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/isFinite)
+ * method.
  *
  * @param {*} value Reference to check.
  * @returns {boolean} True if `value` is a `Number`.
@@ -566,6 +612,11 @@ function isFile(obj) {
 }
 
 
+function isFormData(obj) {
+  return toString.call(obj) === '[object FormData]';
+}
+
+
 function isBlob(obj) {
   return toString.call(obj) === '[object Blob]';
 }
@@ -578,6 +629,12 @@ function isBoolean(value) {
 
 function isPromiseLike(obj) {
   return obj && isFunction(obj.then);
+}
+
+
+var TYPED_ARRAY_REGEXP = /^\[object (Uint8(Clamped)?)|(Uint16)|(Uint32)|(Int8)|(Int16)|(Int32)|(Float(32)|(64))Array\]$/;
+function isTypedArray(value) {
+  return TYPED_ARRAY_REGEXP.test(toString.call(value));
 }
 
 
@@ -618,14 +675,15 @@ function isElement(node) {
  */
 function makeMap(str) {
   var obj = {}, items = str.split(","), i;
-  for (i = 0; i < items.length; i++)
-    obj[ items[i] ] = true;
+  for (i = 0; i < items.length; i++) {
+    obj[items[i]] = true;
+  }
   return obj;
 }
 
 
 function nodeName_(element) {
-  return lowercase(element.nodeName || element[0].nodeName);
+  return lowercase(element.nodeName || (element[0] && element[0].nodeName));
 }
 
 function includes(array, obj) {
@@ -634,9 +692,10 @@ function includes(array, obj) {
 
 function arrayRemove(array, value) {
   var index = array.indexOf(value);
-  if (index >=0)
+  if (index >= 0) {
     array.splice(index, 1);
-  return value;
+  }
+  return index;
 }
 
 /**
@@ -649,7 +708,7 @@ function arrayRemove(array, value) {
  * Creates a deep copy of `source`, which should be an object or an array.
  *
  * * If no destination is supplied, a copy of the object or array is created.
- * * If a destination is provided, all of its elements (for array) or properties (for objects)
+ * * If a destination is provided, all of its elements (for arrays) or properties (for objects)
  *   are deleted and then all elements/properties from the source are copied to it.
  * * If `source` is not an object or array (inc. `null` and `undefined`), `source` is returned.
  * * If `source` is identical to 'destination' an exception will be thrown.
@@ -702,12 +761,18 @@ function copy(source, destination, stackSource, stackDest) {
     throw ngMinErr('cpws',
       "Can't copy! Making copies of Window or Scope instances is not supported.");
   }
+  if (isTypedArray(destination)) {
+    throw ngMinErr('cpta',
+      "Can't copy! TypedArray destination cannot be mutated.");
+  }
 
   if (!destination) {
     destination = source;
     if (source) {
       if (isArray(source)) {
         destination = copy(source, [], stackSource, stackDest);
+      } else if (isTypedArray(source)) {
+        destination = new source.constructor(source);
       } else if (isDate(source)) {
         destination = new Date(source.getTime());
       } else if (isRegExp(source)) {
@@ -835,7 +900,7 @@ function equals(o1, o2) {
       if (isArray(o1)) {
         if (!isArray(o2)) return false;
         if ((length = o1.length) == o2.length) {
-          for (key=0; key<length; key++) {
+          for (key = 0; key < length; key++) {
             if (!equals(o1[key], o2[key])) return false;
           }
           return true;
@@ -843,10 +908,11 @@ function equals(o1, o2) {
       } else if (isDate(o1)) {
         if (!isDate(o2)) return false;
         return equals(o1.getTime(), o2.getTime());
-      } else if (isRegExp(o1) && isRegExp(o2)) {
-        return o1.toString() == o2.toString();
+      } else if (isRegExp(o1)) {
+        return isRegExp(o2) ? o1.toString() == o2.toString() : false;
       } else {
-        if (isScope(o1) || isScope(o2) || isWindow(o1) || isWindow(o2) || isArray(o2)) return false;
+        if (isScope(o1) || isScope(o2) || isWindow(o1) || isWindow(o2) ||
+          isArray(o2) || isDate(o2) || isRegExp(o2)) return false;
         keySet = {};
         for (key in o1) {
           if (key.charAt(0) === '$' || isFunction(o1[key])) continue;
@@ -885,7 +951,58 @@ var csp = function() {
   return (csp.isActive_ = active);
 };
 
+/**
+ * @ngdoc directive
+ * @module ng
+ * @name ngJq
+ *
+ * @element ANY
+ * @param {string=} the name of the library available under `window`
+ * to be used for angular.element
+ * @description
+ * Use this directive to force the angular.element library.  This should be
+ * used to force either jqLite by leaving ng-jq blank or setting the name of
+ * the jquery variable under window (eg. jQuery).
+ *
+ * Since this directive is global for the angular library, it is recommended
+ * that it's added to the same element as ng-app or the HTML element, but it is not mandatory.
+ * It needs to be noted that only the first instance of `ng-jq` will be used and all others
+ * ignored.
+ *
+ * @example
+ * This example shows how to force jqLite using the `ngJq` directive to the `html` tag.
+ ```html
+ <!doctype html>
+ <html ng-app ng-jq>
+ ...
+ ...
+ </html>
+ ```
+ * @example
+ * This example shows how to use a jQuery based library of a different name.
+ * The library name must be available at the top most 'window'.
+ ```html
+ <!doctype html>
+ <html ng-app ng-jq="jQueryLib">
+ ...
+ ...
+ </html>
+ ```
+ */
+var jq = function() {
+  if (isDefined(jq.name_)) return jq.name_;
+  var el;
+  var i, ii = ngAttrPrefixes.length, prefix, name;
+  for (i = 0; i < ii; ++i) {
+    prefix = ngAttrPrefixes[i];
+    if (el = document.querySelector('[' + prefix.replace(':', '\\:') + 'jq]')) {
+      name = el.getAttribute(prefix + 'jq');
+      break;
+    }
+  }
 
+  return (jq.name_ = name);
+};
 
 function concat(array1, array2, index) {
   return array1.concat(slice.call(array2, index));
@@ -921,7 +1038,7 @@ function bind(self, fn) {
     return curryArgs.length
       ? function() {
           return arguments.length
-            ? fn.apply(self, curryArgs.concat(slice.call(arguments, 0)))
+            ? fn.apply(self, concat(curryArgs, arguments, 0))
             : fn.apply(self, curryArgs);
         }
       : function() {
@@ -964,12 +1081,16 @@ function toJsonReplacer(key, value) {
  * stripped since angular uses this notation internally.
  *
  * @param {Object|Array|Date|string|number} obj Input to be serialized into JSON.
- * @param {boolean=} pretty If set to true, the JSON output will contain newlines and whitespace.
+ * @param {boolean|number} [pretty=2] If set to true, the JSON output will contain newlines and whitespace.
+ *    If set to an integer, the JSON output will contain that many spaces per indentation.
  * @returns {string|undefined} JSON-ified string representing `obj`.
  */
 function toJson(obj, pretty) {
   if (typeof obj === 'undefined') return undefined;
-  return JSON.stringify(obj, toJsonReplacer, pretty ? '  ' : null);
+  if (!isNumber(pretty)) {
+    pretty = pretty ? 2 : null;
+  }
+  return JSON.stringify(obj, toJsonReplacer, pretty);
 }
 
 
@@ -983,12 +1104,32 @@ function toJson(obj, pretty) {
  * Deserializes a JSON string.
  *
  * @param {string} json JSON string to deserialize.
- * @returns {Object|Array|string|number} Deserialized thingy.
+ * @returns {Object|Array|string|number} Deserialized JSON string.
  */
 function fromJson(json) {
   return isString(json)
       ? JSON.parse(json)
       : json;
+}
+
+
+function timezoneToOffset(timezone, fallback) {
+  var requestedTimezoneOffset = Date.parse('Jan 01, 1970 00:00:00 ' + timezone) / 60000;
+  return isNaN(requestedTimezoneOffset) ? fallback : requestedTimezoneOffset;
+}
+
+
+function addDateMinutes(date, minutes) {
+  date = new Date(date.getTime());
+  date.setMinutes(date.getMinutes() + minutes);
+  return date;
+}
+
+
+function convertTimezoneToLocal(date, timezone, reverse) {
+  reverse = reverse ? -1 : 1;
+  var timezoneOffset = timezoneToOffset(timezone, date.getTimezoneOffset());
+  return addDateMinutes(date, reverse * (timezoneOffset - date.getTimezoneOffset()));
 }
 
 
@@ -1120,10 +1261,9 @@ var ngAttrPrefixes = ['ng-', 'data-ng-', 'ng:', 'x-ng-'];
 
 function getNgAttribute(element, ngAttr) {
   var attr, i, ii = ngAttrPrefixes.length;
-  element = jqLite(element);
-  for (i=0; i<ii; ++i) {
+  for (i = 0; i < ii; ++i) {
     attr = ngAttrPrefixes[i] + ngAttr;
-    if (isString(attr = element.attr(attr))) {
+    if (isString(attr = element.getAttribute(attr))) {
       return attr;
     }
   }
@@ -1156,7 +1296,7 @@ function getNgAttribute(element, ngAttr) {
  * {@link angular.bootstrap} instead. AngularJS applications cannot be nested within each other.
  *
  * You can specify an **AngularJS module** to be used as the root module for the application.  This
- * module will be loaded into the {@link auto.$injector} when the application is bootstrapped and
+ * module will be loaded into the {@link auto.$injector} when the application is bootstrapped. It
  * should contain the application code needed or have dependencies on other modules that will
  * contain the code. See {@link angular.module} for more information.
  *
@@ -1164,7 +1304,7 @@ function getNgAttribute(element, ngAttr) {
  * document would not be compiled, the `AppController` would not be instantiated and the `{{ a+b }}`
  * would not be resolved to `3`.
  *
- * `ngApp` is the easiest, and most common, way to bootstrap an application.
+ * `ngApp` is the easiest, and most common way to bootstrap an application.
  *
  <example module="ngAppDemo">
    <file name="index.html">
@@ -1326,13 +1466,13 @@ function angularInit(element, bootstrap) {
  * @param {DOMElement} element DOM element which is the root of angular application.
  * @param {Array<String|Function|Array>=} modules an array of modules to load into the application.
  *     Each item in the array should be the name of a predefined module or a (DI annotated)
- *     function that will be invoked by the injector as a run block.
+ *     function that will be invoked by the injector as a `config` block.
  *     See: {@link angular.module modules}
  * @param {Object=} config an object for defining configuration options for the application. The
  *     following keys are supported:
  *
- *     - `strictDi`: disable automatic function annotation for the application. This is meant to
- *       assist in finding bugs which break minified code.
+ * * `strictDi` - disable automatic function annotation for the application. This is meant to
+ *   assist in finding bugs which break minified code. Defaults to `false`.
  *
  * @returns {auto.$injector} Returns the newly created injector for this app.
  */
@@ -1396,8 +1536,12 @@ function bootstrap(element, modules, config) {
     forEach(extraModules, function(module) {
       modules.push(module);
     });
-    doBootstrap();
+    return doBootstrap();
   };
+
+  if (isFunction(angular.resumeDeferredBootstrap)) {
+    angular.resumeDeferredBootstrap();
+  }
 }
 
 /**
@@ -1424,7 +1568,12 @@ function reloadWithDebugInfo() {
  * @param {DOMElement} element DOM element which is the root of angular application.
  */
 function getTestability(rootElement) {
-  return angular.element(rootElement).injector().get('$$testability');
+  var injector = angular.element(rootElement).injector();
+  if (!injector) {
+    throw ngMinErr('test',
+      'no injector found for element argument to getTestability');
+  }
+  return injector.get('$$testability');
 }
 
 var SNAKE_CASE_REGEXP = /[A-Z]/g;
@@ -1445,7 +1594,12 @@ function bindJQuery() {
   }
 
   // bind to jQuery if present;
-  jQuery = window.jQuery;
+  var jqName = jq();
+  jQuery = window.jQuery; // use default jQuery.
+  if (isDefined(jqName)) { // `ngJq` present
+    jQuery = jqName === null ? undefined : window[jqName]; // if empty; use jqLite. if not empty, use jQuery specified by `ngJq`.
+  }
+
   // Use jQuery if it exists with proper functionality, otherwise default to us.
   // Angular 1.2+ requires jQuery 1.7+ for on()/off() support.
   // Angular 1.3+ technically requires at least jQuery 2.1+ but it may work with older
@@ -1584,6 +1738,7 @@ function createMap() {
 }
 
 var NODE_TYPE_ELEMENT = 1;
+var NODE_TYPE_ATTRIBUTE = 2;
 var NODE_TYPE_TEXT = 3;
 var NODE_TYPE_COMMENT = 8;
 var NODE_TYPE_DOCUMENT = 9;

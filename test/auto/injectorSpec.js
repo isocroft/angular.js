@@ -4,12 +4,14 @@ describe('injector', function() {
   var providers;
   var injector;
   var providerInjector;
+  var controllerProvider;
 
-  beforeEach(module(function($provide, $injector) {
+  beforeEach(module(function($provide, $injector, $controllerProvider) {
     providers = function(name, factory, annotations) {
-      $provide.factory(name, extend(factory, annotations||{}));
+      $provide.factory(name, extend(factory, annotations || {}));
     };
     providerInjector = $injector;
+    controllerProvider = $controllerProvider;
   }));
   beforeEach(inject(function($injector) {
     injector = $injector;
@@ -28,7 +30,7 @@ describe('injector', function() {
 
   it('should inject providers', function() {
     providers('a', function() {return 'Mi';});
-    providers('b', function(mi) {return mi+'sko';}, {$inject:['a']});
+    providers('b', function(mi) {return mi + 'sko';}, {$inject:['a']});
     expect(injector.get('b')).toEqual('Misko');
   });
 
@@ -71,6 +73,22 @@ describe('injector', function() {
     expect(function() {
       injector.get('idontexist');
     }).toThrowMinErr("$injector", "unpr", "Unknown provider: idontexistProvider <- idontexist");
+  });
+
+
+  it('should provide the caller name if given', function(done) {
+    expect(function() {
+      injector.get('idontexist', 'callerName');
+    }).toThrowMinErr("$injector", "unpr", "Unknown provider: idontexistProvider <- idontexist <- callerName");
+  });
+
+
+  it('should provide the caller name for controllers', function(done) {
+    controllerProvider.register('myCtrl', function(idontexist) {});
+    var $controller = injector.get('$controller');
+    expect(function() {
+      $controller('myCtrl', {$scope: {}});
+    }).toThrowMinErr("$injector", "unpr", "Unknown provider: idontexistProvider <- idontexist <- myCtrl");
   });
 
 
@@ -220,7 +238,11 @@ describe('injector', function() {
 
 
     it('should publish annotate API', function() {
-      expect(injector.annotate).toBe(annotate);
+      expect(angular.mock.$$annotate).toBe(annotate);
+      spyOn(angular.mock, '$$annotate').andCallThrough();
+      function fn() {}
+      injector.annotate(fn);
+      expect(angular.mock.$$annotate).toHaveBeenCalledWith(fn);
     });
   });
 
@@ -654,7 +676,7 @@ describe('injector', function() {
       it('should decorate the missing service error with module name', function() {
         angular.module('TestModule', [], function(xyzzy) {});
         expect(function() {
-          createInjector(['TestModule' ]);
+          createInjector(['TestModule']);
         }).toThrowMinErr(
           '$injector', 'modulerr', /Failed to instantiate module TestModule due to:\n.*\[\$injector:unpr] Unknown provider: xyzzy/
         );
@@ -710,12 +732,12 @@ describe('injector', function() {
     var Instance = function() { this.name = 'angular'; };
 
     function createInjectorWithValue(instanceName, instance) {
-      return createInjector([ ['$provide', function(provide) {
+      return createInjector([['$provide', function(provide) {
         provide.value(instanceName, instance);
       }]]);
     }
     function createInjectorWithFactory(serviceName, serviceDef) {
-      return createInjector([ ['$provide', function(provide) {
+      return createInjector([['$provide', function(provide) {
         provide.factory(serviceName, serviceDef);
       }]]);
     }
@@ -748,7 +770,7 @@ describe('injector', function() {
     var $injector;
 
     beforeEach(function() {
-      $injector = createInjector([ function($provide) {
+      $injector = createInjector([function($provide) {
         $provide.value('book', 'moby');
         $provide.value('author', 'melville');
       }]);
@@ -812,7 +834,7 @@ describe('injector', function() {
     var $injector;
 
     beforeEach(function() {
-      $injector = createInjector([ function($provide) {
+      $injector = createInjector([function($provide) {
         $provide.value('book', 'moby');
         $provide.value('author', 'melville');
       }]);
@@ -954,7 +976,7 @@ describe('strict-di injector', function() {
       });
     });
     inject(function($injector) {
-      expect (function() {
+      expect(function() {
         $injector.invoke(function($test2) {});
       }).toThrowMinErr('$injector', 'strictdi');
     });
@@ -968,7 +990,7 @@ describe('strict-di injector', function() {
       });
     });
     inject(function($injector) {
-      expect (function() {
+      expect(function() {
         $injector.invoke(['$test', function($test) {}]);
       }).toThrowMinErr('$injector', 'strictdi');
     });
